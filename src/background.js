@@ -1,36 +1,42 @@
-/* global chrome */
-const nihongo = require("nihongo");
-const jishoApi = require("unofficial-jisho-api");
-const jisho = new jishoApi();
+// Import the libraries using the ES Module syntax.
+// You will need to have the actual files (e.g., 'jisho.js', 'nihongo.js')
+// in your extension's directory.
+import JishoAPI from './unofficial-jisho-api.js';
+import { parseKanji } from './nihongo.js';
 
+const jisho = new JishoAPI();
+
+// This function remains largely the same, but it's good practice
+// to check if the API call was successful.
 function getInfo(kanjis, tabId) {
   kanjis.forEach((kanji) => {
     jisho.searchForKanji(kanji).then((result) => {
-      chrome.tabs.sendMessage(tabId, {
-        action: "showKanji",
-        kanji: result,
-      });
+      // Only send a message if a result was actually found
+      if (result.found) {
+        chrome.tabs.sendMessage(tabId, {
+          action: "showKanji",
+          kanji: result,
+        });
+      }
     });
   });
 }
 
-// create a contextMenu so that
-// the user can rightclick
-// and search the highlighted kanji character
-chrome.contextMenus.create({
-  id: "kanjidex-tooltip",
-  title: "Search with Kanjidex",
-  contexts: ["selection"],
+// Create the context menu when the extension is installed.
+// This prevents errors from re-declaring the menu every time the service worker starts.
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.create({
+    id: "kanjidex-tooltip",
+    title: "Search with Kanjidex",
+    contexts: ["selection"],
+  });
 });
 
-chrome.contextMenus.onClicked.addListener(function (info) {
-  chrome.tabs.query(
-    {
-      active: true,
-      currentWindow: true,
-    },
-    function (tabs) {
-      getInfo(nihongo.parseKanji(info.selectionText), tabs[0].id);
-    }
-  );
+// The listener for when the context menu is clicked.
+// The 'tab' object is passed directly, which is more efficient than querying for it.
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === "kanjidex-tooltip" && info.selectionText) {
+    const kanjis = parseKanji(info.selectionText);
+    getInfo(kanjis, tab.id);
+  }
 });
